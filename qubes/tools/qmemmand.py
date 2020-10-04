@@ -28,6 +28,8 @@ import socket
 import sys
 import threading
 
+import systemd.daemon
+import systemd.journal
 import xen.lowlevel.xs
 
 import qubes.qmemman
@@ -235,27 +237,33 @@ parser.add_argument('--foreground',
 
 
 def main():
+    under_systemd = 'NOTIFY_SOCKET' in os.environ
+
     args = parser.parse_args()
 
-    # setup logging
-    ha_syslog = logging.handlers.SysLogHandler('/dev/log')
-    ha_syslog.setFormatter(
-        logging.Formatter('%(name)s[%(process)d]: %(message)s'))
-    logging.root.addHandler(ha_syslog)
+    if not under_systemd:
+        # setup logging
+        ha_syslog = logging.handlers.SysLogHandler('/dev/log')
+        ha_syslog.setFormatter(
+            logging.Formatter('%(name)s[%(process)d]: %(message)s'))
+        logging.root.addHandler(ha_syslog)
 
-    # leave log for backwards compatibility
-    ha_file = logging.FileHandler(LOG_PATH)
-    ha_file.setFormatter(
-        logging.Formatter('%(asctime)s %(name)s[%(process)d]: %(message)s'))
-    logging.root.addHandler(ha_file)
-
-    if args.foreground:
-        ha_stderr = logging.StreamHandler(sys.stderr)
+        # leave log for backwards compatibility
+        ha_file = logging.FileHandler(LOG_PATH)
         ha_file.setFormatter(
             logging.Formatter('%(asctime)s %(name)s[%(process)d]: %(message)s'))
-        logging.root.addHandler(ha_stderr)
+        logging.root.addHandler(ha_file)
 
-    sys.stdin.close()
+        if args.foreground:
+            ha_stderr = logging.StreamHandler(sys.stderr)
+            ha_file.setFormatter(
+                logging.Formatter('%(asctime)s %(name)s[%(process)d]: %(message)s'))
+            logging.root.addHandler(ha_stderr)
+        sys.stdin.close()
+    else:
+        # Under systemd we use the systemd JournalHandler.
+        logging.root.addHandler(
+            systemd.journal.JournalHandler(SYSLOG_IDENTIFIER="qmemman"))
 
     logging.root.setLevel(parser.get_loglevel_from_verbosity(args))
 
@@ -281,30 +289,31 @@ def main():
         ' CACHE_FACTOR={algo.CACHE_FACTOR}'.format(
             algo=qubes.qmemman.algo))
 
-    try:
-        os.unlink(SOCK_PATH)
-    except:
-        pass
+    server = None
+    systemd_sock = None
+    systemd_listen_fds = systemd.daemon.listen_fds(True)
+    if systemd_listen_fds:
+        log.debug('listening on systemd provided socket')
+        server = socketserver.UnixStreamServer(None, QMemmanReqHandler, False)
+        server.socket = socket.fromfd(
+            systemd_listen_fds[0], socket.AF_UNIX, socket.SOCK_STREAM)
+    else:
+        try:
+            os.unlink(SOCK_PATH)
+        except:
+            pass
 
-    log.debug('instantiating server')
-    os.umask(0)
+        log.debug('instantiating server')
+        os.umask(0)
+
+        server = socketserver.UnixStreamServer(SOCK_PATH, QMemmanReqHandler)
+        os.umask(0o077)
 
     # Initialize the connection to Xen and to XenStore
     system_state.init()
 
-    server = socketserver.UnixStreamServer(SOCK_PATH, QMemmanReqHandler)
-    os.umask(0o077)
-
-    # notify systemd
-    nofity_socket = os.getenv('NOTIFY_SOCKET')
-    if nofity_socket:
-        log.debug('notifying systemd')
-        s = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
-        if nofity_socket.startswith('@'):
-            nofity_socket = '\0%s' % nofity_socket[1:]
-        s.connect(nofity_socket)
-        s.sendall(b"READY=1")
-        s.close()
+    if under_systemd:
+        systemd.daemon.notify('READY=1')
 
     threading.Thread(target=server.serve_forever).start()
     XS_Watcher().watch_loop()
