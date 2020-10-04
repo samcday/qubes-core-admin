@@ -29,6 +29,8 @@ import socket
 import struct
 import traceback
 
+import systemd.daemon
+
 import qubes.exc
 
 class ProtocolError(AssertionError):
@@ -414,6 +416,11 @@ def create_servers(*args, force=False, loop=None, **kwargs):
     '''
     loop = loop or asyncio.get_event_loop()
 
+    # Wrap any passed in file descriptors from systemd into socket objects.
+    # We'll use them in the setup code below, rather than binding ourselves.
+    sd_listen_socks = (socket.fromfd(fd, socket.AF_UNIX,
+        socket.SOCK_STREAM) for fd in systemd.daemon.listen_fds())
+
     servers = []
     old_umask = os.umask(0o007)
     try:
@@ -425,15 +432,21 @@ def create_servers(*args, force=False, loop=None, **kwargs):
                 'SOCKNAME needs to be overloaded in {}'.format(
                     type(handler).__name__)
 
-            if os.path.exists(sockpath):
-                cleanup_socket(sockpath, force)
+            sock = next(sd_listen_socks, None)
+            if sock:
+                server = yield from loop.create_unix_server(
+                    functools.partial(QubesDaemonProtocol, handler, **kwargs),
+                    sock=sock)
+            else:
+                if os.path.exists(sockpath):
+                    cleanup_socket(sockpath, force)
 
-            server = yield from loop.create_unix_server(
-                functools.partial(QubesDaemonProtocol, handler, **kwargs),
-                sockpath)
+                server = yield from loop.create_unix_server(
+                    functools.partial(QubesDaemonProtocol, handler, **kwargs),
+                    sockpath)
 
-            for sock in server.sockets:
-                shutil.chown(sock.getsockname(), group='qubes')
+                for sock in server.sockets:
+                    shutil.chown(sock.getsockname(), group='qubes')
 
             servers.append(server)
     except:

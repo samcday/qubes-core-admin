@@ -66,13 +66,15 @@ def main(args=None):
         loop.run_forever()
         loop.run_until_complete(asyncio.wait([
             server.wait_closed() for server in servers]))
-        for sockname in socknames:
-            try:
-                os.unlink(sockname)
-            except FileNotFoundError:
-                args.app.log.warning(
-                    'socket {} got unlinked sometime before shutdown'.format(
-                        sockname))
+
+        if not systemd.daemon.booted():
+            for sockname in socknames:
+                try:
+                    os.unlink(sockname)
+                except FileNotFoundError:
+                    args.app.log.warning(
+                        'socket {} got unlinked sometime before shutdown'.format(
+                            sockname))
     finally:
         loop.close()
 

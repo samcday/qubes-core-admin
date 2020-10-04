@@ -1,0 +1,7 @@
+[Socket]
+ListenStream=/run/qubesd.sock
+ListenStream=/run/qubesd.internal.sock
+ListenStream=/run/qubesd.misc.sock
+
+[Install]
+WantedBy=sockets.target
