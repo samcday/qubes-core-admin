@@ -29,6 +29,8 @@ import sys
 import fcntl
 
 import dbus
+import systemd.daemon
+from systemd.journal import JournalHandler
 
 FORMAT_CONSOLE = '%(message)s'
 FORMAT_LOG = '%(asctime)s %(message)s'
@@ -92,6 +94,21 @@ def enable():
     if logging.root.handlers:
         return
 
+    def handle_exception(exc_type, exc_value, exc_traceback):
+        if issubclass(exc_type, KeyboardInterrupt):
+            sys.__excepthook__(exc_type, exc_value, exc_traceback)
+            return
+
+        logging.critical("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
+
+    sys.excepthook = handle_exception
+
+    logging.root.setLevel(logging.INFO)
+
+    if systemd.daemon.booted():
+        logging.root.addHandler(JournalHandler(SYSLOG_IDENTIFIER='qubesd'))
+        return
+
     handler_console = logging.StreamHandler(sys.stderr)
     handler_console.setFormatter(formatter_console)
     logging.root.addHandler(handler_console)
@@ -111,7 +128,6 @@ def enable():
     handler_log.setFormatter(formatter_log)
     logging.root.addHandler(handler_log)
 
-    logging.root.setLevel(logging.INFO)
 
 def enable_debug():
     '''Enable debug logging
@@ -122,8 +138,9 @@ def enable_debug():
     enable()
     logging.root.setLevel(logging.DEBUG)
 
-    for handler in logging.root.handlers:
-        handler.setFormatter(formatter_debug)
+    if not systemd.daemon.booted():
+        for handler in logging.root.handlers:
+            handler.setFormatter(formatter_debug)
 
 def get_vm_logger(vmname):
     '''Initialise logging for particular VM name
@@ -135,6 +152,10 @@ def get_vm_logger(vmname):
     logger = logging.getLogger('vm.' + vmname)
     if logger.handlers:
         return logger
+
+    if systemd.daemon.booted():
+        return logger
+
     old_umask = os.umask(0o007)
     try:
         handler = logging.FileHandler(

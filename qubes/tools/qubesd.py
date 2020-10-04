@@ -5,6 +5,7 @@ import os
 import signal
 
 import libvirtaio
+import systemd.daemon
 
 import qubes
 import qubes.api
@@ -27,6 +28,10 @@ parser.add_argument('--debug', action='store_true', default=False,
          'tracebacks) and also send tracebacks to Admin API clients')
 
 def main(args=None):
+    if systemd.daemon.booted():
+        # If under systemd we can enable logging as early as possible.
+        qubes.log.enable()
+
     loop = asyncio.get_event_loop()
     libvirtaio.virEventRegisterAsyncIOImpl(loop=loop)
     try:
@@ -55,9 +60,7 @@ def main(args=None):
         loop.add_signal_handler(getattr(signal, signame),
             sighandler, loop, signame, servers)
 
-    qubes.utils.systemd_notify()
-    # make sure children will not inherit this
-    os.environ.pop('NOTIFY_SOCKET', None)
+    systemd.daemon.notify('READY=1', True)
 
     try:
         loop.run_forever()
