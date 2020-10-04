@@ -1,0 +1,4 @@
+d @STATEDIR@/qubes 2770 root qubes
+f @STATEDIR@/qubes/xl-lock 0660 root qubes
+f @STATEDIR@/qubes/empty 0444 root qubes
+d @STATEDIR@/xen-hotplug 0755 root root
