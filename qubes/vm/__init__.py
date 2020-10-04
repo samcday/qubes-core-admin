@@ -420,7 +420,9 @@ class BaseVM(qubes.PropertyHolder):
             self._qdb_connection_watch.close()
 
         import qubesdb  # pylint: disable=import-error
-        self._qdb_connection_watch = qubesdb.QubesDB(self.name)
+        self.log.debug('Opening QubesDB %s', self.name)
+        self._qdb_connection_watch = (qubesdb.QubesDB)(
+            *([self.name] if self.name != 'dom0' else []))
         if loop is None:
             loop = asyncio.get_event_loop()
         loop.add_reader(self._qdb_connection_watch.watch_fd(),
