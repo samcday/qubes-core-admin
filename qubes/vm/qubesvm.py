@@ -31,6 +31,7 @@ import string
 import subprocess
 import uuid
 
+import dbus
 import libvirt  # pylint: disable=import-error
 import lxml
 
@@ -1202,15 +1203,32 @@ class QubesVM(qubes.vm.mix.net.NetVMMixin, qubes.vm.BaseVM):
                 yield from self.fire_event_async('domain-spawn',
                                                  start_guid=start_guid)
 
+                systemd_daemons = 'SYSTEMD_DAEMONS' in os.environ
+                if systemd_daemons:
+                    self.log.info('Starting qube daemons with systemd')
+                    bus = dbus.SystemBus()
+                    systemd = bus.get_object('org.freedesktop.systemd1',
+                        '/org/freedesktop/systemd1')
+                    manager = dbus.Interface(systemd,
+                        'org.freedesktop.systemd1.Manager')
+                    job = manager.StartUnit(
+                        'qubes-qube@{}.service'.format(self.name), 'replace')
+                    # Wait for job to complete.
+                    # TODO: not like this tho.
+                    yield from asyncio.sleep(1)
+
+
                 self.log.info('Setting Qubes DB info for the VM')
-                yield from self.start_qubesdb()
+                if not systemd_daemons:
+                    yield from self.start_qubesdb()
                 self.create_qdb_entries()
                 self.start_qdb_watch()
 
                 self.log.warning('Activating the {} VM'.format(self.name))
                 self.libvirt_domain.resume()
 
-                yield from self.start_qrexec_daemon()
+                if not systemd_daemons:
+                    yield from self.start_qrexec_daemon()
 
                 yield from self.fire_event_async('domain-start',
                                                  start_guid=start_guid)
@@ -1300,6 +1318,16 @@ class QubesVM(qubes.vm.mix.net.NetVMMixin, qubes.vm.BaseVM):
         try:
             yield from self.fire_event_async('domain-pre-shutdown',
                                              pre_event=True, force=force)
+
+            if 'SYSTEMD_DAEMONS' in os.environ:
+                self.log.info('Starting qube daemons with systemd')
+                bus = dbus.SystemBus()
+                systemd = bus.get_object('org.freedesktop.systemd1',
+                    '/org/freedesktop/systemd1')
+                manager = dbus.Interface(systemd,
+                    'org.freedesktop.systemd1.Manager')
+                manager.StopUnit(
+                    'qubes-qube@{}.service'.format(self.name), 'replace')
 
             self.libvirt_domain.shutdown()
 

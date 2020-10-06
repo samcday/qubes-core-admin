@@ -1,0 +1,9 @@
+[Unit]
+Description=Qube login session binder
+BindsTo=graphical-session.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=systemctl --system start qubes-session.target
+ExecStop=systemctl --system stop qubes-session.target

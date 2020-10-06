@@ -1,0 +1,10 @@
+[Unit]
+After=qubes-db@%i.socket qubes-qrexec@%i.socket
+Requires=qubes-db@%i.socket qubes-qrexec@%i.socket
+Wants=qubes-db@%i.service qubes-qrexec@%i.service qubes-guid@%i.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/qubes/write-qube-file.sh %i
+ExecStop=rm /run/qubes/%i.qube
+RemainAfterExit=yes

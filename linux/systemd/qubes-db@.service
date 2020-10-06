@@ -1,0 +1,10 @@
+[Unit]
+Description=Qubes DB %i agent
+After=xenstored.service qubes-qube@%i.service
+Requires=xenstored.service qubes-qube@%i.service
+PartOf=qubes-qube@%i.service
+
+[Service]
+EnvironmentFile=/run/qubes/%i.qube
+ExecStart=/usr/sbin/qubesdb-daemon $DOMID %i
+Type=notify

@@ -3,6 +3,7 @@ Description=Qubes OS daemon
 Before=systemd-user-sessions.service
 
 [Service]
+Environment=SYSTEMD_DAEMONS=1
 Type=notify
 ExecStart=/usr/bin/qubesd
 KillMode=process

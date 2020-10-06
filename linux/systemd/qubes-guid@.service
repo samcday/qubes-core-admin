@@ -1,0 +1,11 @@
+[Unit]
+Description=Qubes GUI daemon for %i
+After=qubes-qube@%i.service
+Requires=qubes-qube@%i.service qubes-session.target
+PartOf=qubes-qube@%i.service qubes-session.target
+
+[Service]
+Type=simple
+Environment=DISPLAY=:0
+EnvironmentFile=/run/qubes/%i.qube
+ExecStart=/usr/bin/qubes-guid -f -d ${DOMID} -N %i ${QUBE_COLOR} -i /usr/share/icons/hicolor/128x128/devices/${QUBE_ICON}.png

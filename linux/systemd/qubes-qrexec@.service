@@ -1,0 +1,10 @@
+[Unit]
+Description=Qubes qrexec agent for %i
+After=xenstored.service qubes-qube@%i.service
+Requires=xenstored.service qubes-qube@%i.service
+PartOf=qubes-qube@%i.service
+
+[Service]
+EnvironmentFile=/run/qubes/%i.qube
+ExecStart=/usr/sbin/qrexec-daemon -D $DOMID %i $DEFAULT_USER
+Type=notify

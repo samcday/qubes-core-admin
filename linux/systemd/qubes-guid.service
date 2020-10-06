@@ -1,0 +1,8 @@
+[Unit]
+Description=Qubes GUI daemons
+Requires=qubes-session.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/qubes/start-guids.sh
+RemainAfterExit=yes

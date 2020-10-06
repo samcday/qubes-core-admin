@@ -1,0 +1,5 @@
+[Unit]
+PartOf=qubes-qube@%i.service
+
+[Socket]
+ListenStream=/run/qubes/qrexec.%i
