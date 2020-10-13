@@ -1,6 +1,8 @@
 [Unit]
 Description=Qubes OS daemon
 Before=systemd-user-sessions.service
+Requires=virtxend.socket
+After=virtxend.socket
 
 [Service]
 Environment=SYSTEMD_DAEMONS=1
